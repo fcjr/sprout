@@ -26,9 +26,14 @@ type WirelessConfig struct {
 	Networks map[string]NetworkConfig `yaml:"networks"`
 }
 
+type OutputConfig struct {
+	Path string `yaml:"path"`
+}
+
 type ImageConfig struct {
 	SSHKeys  []string       `yaml:"ssh_keys"`
 	Wireless WirelessConfig `yaml:"wireless"`
+	Output   OutputConfig   `yaml:"output"`
 }
 
 func (n *Nix) LoadConfigFromYAML(filename string) (*ImageConfig, error) {
@@ -62,7 +67,7 @@ func (n *Nix) GenerateImage(config ImageConfig) (string, error) {
 }
 
 func (n *Nix) Build(filename string) (string, error) {
-	cmd := exec.Command("nix-build", filename)
+	cmd := exec.Command("nix-build", "--no-link", filename)
 	
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
