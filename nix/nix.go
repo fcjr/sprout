@@ -22,7 +22,7 @@ type NetworkConfig struct {
 }
 
 type WirelessConfig struct {
-	Enabled  bool                      `yaml:"enabled"`
+	Enabled  bool                     `yaml:"enabled"`
 	Networks map[string]NetworkConfig `yaml:"networks"`
 }
 
@@ -68,24 +68,24 @@ func (n *Nix) GenerateImage(config ImageConfig) (string, error) {
 
 func (n *Nix) Build(filename string) (string, error) {
 	cmd := exec.Command("nix-build", "--no-link", filename)
-	
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	
+
 	err := cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("nix-build failed: %v\nstderr: %s", err, stderr.String())
 	}
-	
+
 	output := strings.TrimSpace(stdout.String())
 	if output == "" {
 		return "", fmt.Errorf("nix-build produced no output")
 	}
-	
+
 	// Get the last line of output which should be the path to the built image
 	lines := strings.Split(output, "\n")
 	imagePath := strings.TrimSpace(lines[len(lines)-1])
-	
+
 	return imagePath, nil
 }
