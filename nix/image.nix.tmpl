@@ -18,6 +18,12 @@ let
 {{- end }}
       # bzip2 compression takes loads of time with emulation, skip it.
       sdImage.compressImage = false;
+{{- if .DockerCompose.Enabled }}
+      # Allow the image to expand on boot to accommodate Docker containers
+      sdImage.expandOnBoot = true;
+      # Increase firmware partition size slightly for Docker overhead
+      sdImage.firmwareSize = lib.mkDefault 50;
+{{- end }}
       # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
       # to be started. Override it with the normal value.
       # [1] https://github.com/NixOS/nixpkgs/blob/9e5aa25/nixos/modules/profiles/installation-device.nix#L76
@@ -26,10 +32,76 @@ let
       services.openssh.enable = true;
       
       # Add git to system packages
-      environment.systemPackages = with pkgs; [];
+      environment.systemPackages = with pkgs; [{{- if .DockerCompose.Enabled }} docker-compose{{- end }}];
       
       # Enable Nix flakes
       nix.settings.experimental-features = [ "nix-command" "flakes" ];
+      
+{{- if .DockerCompose.Enabled }}
+      # Enable Docker with minimal configuration to save space
+      virtualisation.docker.enable = true;
+      virtualisation.docker.enableOnBoot = true;
+      virtualisation.docker.autoPrune.enable = true;
+      # Use smaller log driver and limit log size
+      virtualisation.docker.logDriver = "json-file";
+      virtualisation.docker.extraOptions = "--log-opt max-size=10m --log-opt max-file=3";
+      
+      # Add nixos user to docker group
+      users.extraUsers.nixos.extraGroups = [ "docker" ];
+      
+      # Create docker-compose.yaml file with local image references
+      environment.etc."docker/docker-compose.yaml".text = ''
+{{- if .DockerCompose.ModifiedContent }}
+{{ .DockerCompose.ModifiedContent }}{{- else }}
+{{ .DockerCompose.Content }}{{- end }}      '';
+      
+{{- if .DockerCompose.Images }}
+      # Copy Docker image tar files into the system
+{{- range .DockerCompose.Images }}
+      environment.etc."docker/images/{{ .LocalTag }}.tar".source = {{ .TarPath }};
+{{- end }}
+      
+      # Create systemd service to load Docker images on first boot
+      systemd.services.docker-load-images = {
+        description = "Load embedded Docker images";
+        requires = [ "docker.service" ];
+        after = [ "docker.service" ];
+        before = [ "docker-compose.service" ];
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = "yes";
+          ExecStart = let
+            loadScript = pkgs.writeShellScript "load-docker-images" ''
+              # Load all embedded Docker images
+{{- range .DockerCompose.Images }}
+              echo "Loading Docker image: {{ .LocalTag }}"
+              ${pkgs.docker}/bin/docker load -i /etc/docker/images/{{ .LocalTag }}.tar
+{{- end }}
+            '';
+          in "${loadScript}";
+          User = "root";
+        };
+      };
+{{- end }}
+      
+      # Create systemd service to run docker-compose on boot
+      systemd.services.docker-compose = {
+        description = "Docker Compose Application Service";
+        requires = [ "docker.service"{{- if .DockerCompose.Images }} "docker-load-images.service"{{- end }} ];
+        after = [ "docker.service"{{- if .DockerCompose.Images }} "docker-load-images.service"{{- end }} ];
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = "yes";
+          WorkingDirectory = "/etc/docker";
+          ExecStart = "${pkgs.docker-compose}/bin/docker-compose up -d";
+          ExecStop = "${pkgs.docker-compose}/bin/docker-compose down";
+          TimeoutStartSec = "0";
+          User = "nixos";
+        };
+      };
+{{- end }}
       
 {{- if .Wireless.Enabled }}
       # Configure WiFi without conflicting services
