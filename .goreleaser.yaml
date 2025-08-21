@@ -1,0 +1,89 @@
+project_name: sprout
+before:
+  hooks:
+    - go mod tidy
+    - ./scripts/completions.sh
+    - ./scripts/manpages.sh
+builds:
+  - id: sprout
+    main: ./cmd/sprout
+    ldflags:
+      - -s -w -X github.com/fcjr/sprout/internal/version.Version={{ .Version }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    ignore:
+      - goos: windows
+        goarch: arm64
+archives:
+  - formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats:
+          - 'zip'
+    builds_info:
+      group: root
+      owner: root
+    files:
+      - README.md
+      - LICENSE
+      - completions/*
+      - manpages/*
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+nfpms:
+  - ids:
+      - sprout
+    vendor: Frank Chiarulli Jr.
+    homepage: https://github.com/fcjr/sprout
+    maintainer: Frank Chiarulli Jr. <frank@frankchiarulli.com>
+    description: sprout grows ISOs from docker compose files
+    formats:
+      - deb
+      - rpm
+      - apk
+brews:
+  - repository:
+      owner: fcjr
+      name: homebrew-fcjr
+    commit_author:
+      name: Frank Chiarulli Jr.
+      email: frank@frankchiarulli.com
+    homepage: https://github.com/fcjr/sprout
+    description: sprout grows ISOs from docker compose files
+    install: |
+      bin.install "sprout"
+    extra_install: |-
+      bash_completion.install "completions/sprout.bash" => "sprout"
+      zsh_completion.install "completions/sprout.zsh" => "_sprout"
+      fish_completion.install "completions/sprout.fish"
+      man1.install "manpages/sprout.1.gz"
+scoops:
+  -
+    repository:
+      owner: fcjr
+      name: scoop-fcjr
+    commit_author:
+      name: Frank Chiarulli Jr.
+      email: frank@frankchiarulli.com
+    homepage: https://github.com/fcjr/sprout
+    description: sprout grows ISOs from docker compose files
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
