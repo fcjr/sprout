@@ -194,10 +194,10 @@ func (n *Nix) createModifiedComposeContent(dockerConfig *DockerComposeConfig, pr
 }
 
 func (n *Nix) buildAndSaveDockerImages(dockerConfig *DockerComposeConfig, workingDir string) error {
-	fmt.Println("Building and saving Docker images...")
+	fmt.Printf("      \033[36m🐳 Building and saving Docker images...\033[0m\n")
 
 	for i, img := range dockerConfig.Images {
-		fmt.Printf("Processing image: %s\n", img.Name)
+		fmt.Printf("      \033[36m📦 Processing: %s\033[0m\n", img.Name)
 
 		// Check if this is a service that needs to be built
 		if strings.HasSuffix(img.Name, ":latest") && !strings.Contains(img.Name, "/") {
@@ -232,7 +232,7 @@ func (n *Nix) buildAndSaveDockerImages(dockerConfig *DockerComposeConfig, workin
 			return fmt.Errorf("failed to save image %s to %s: %w (stderr: %s)", img.LocalTag, img.TarPath, err, stderr.String())
 		}
 
-		fmt.Printf("Saved image %s to %s\n", img.LocalTag, img.TarPath)
+		fmt.Printf("      \033[32m✅ Saved: %s\033[0m\n", img.LocalTag)
 		dockerConfig.Images[i] = img
 	}
 
@@ -260,6 +260,10 @@ func (n *Nix) Build(filename string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+
+	// Show progress indication during build
+	fmt.Printf("      \033[36m⏳ This may take 5-15 minutes depending on your system...\033[0m\n")
+	fmt.Printf("      \033[36m📥 Downloading and building packages...\033[0m\n")
 
 	err := cmd.Run()
 	if err != nil {
