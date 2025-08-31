@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -254,25 +255,70 @@ func (n *Nix) GenerateImage(config ImageConfig) (string, error) {
 	return buf.String(), nil
 }
 
-func (n *Nix) Build(filename string) (string, error) {
-	cmd := exec.Command("nix-build", "--no-link", filename)
+func (n *Nix) Build(filename string, config *ImageConfig) (string, error) {
+	// Get absolute path of the Nix file
+	absNixFile, err := filepath.Abs(filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Create a temporary directory to bind mount
+	tempDir, err := os.MkdirTemp("", "sprout-docker-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Copy the nix file to temp directory
+	nixFileInTemp := filepath.Join(tempDir, "image.nix")
+	if err := n.copyFile(absNixFile, nixFileInTemp); err != nil {
+		return "", fmt.Errorf("failed to copy nix file: %w", err)
+	}
+
+	// Copy Docker image tar files if they exist
+	if config.DockerCompose.Enabled {
+		for _, img := range config.DockerCompose.Images {
+			if _, err := os.Stat(img.TarPath); err == nil {
+				tarFileName := filepath.Base(img.TarPath)
+				destPath := filepath.Join(tempDir, tarFileName)
+				if err := n.copyFile(img.TarPath, destPath); err != nil {
+					return "", fmt.Errorf("failed to copy docker image %s: %w", img.TarPath, err)
+				}
+				// Update the tar path in the nix file to the container path
+				containerTarPath := filepath.Join("/workspace", tarFileName)
+				if err := n.updateTarPathInNixFile(nixFileInTemp, img.TarPath, containerTarPath); err != nil {
+					return "", fmt.Errorf("failed to update tar path in nix file: %w", err)
+				}
+			}
+		}
+	}
+
+	// Show progress indication during build
+	fmt.Printf("      \033[36m⏳ This may take 5-15 minutes depending on your system...\033[0m\n")
+	fmt.Printf("      \033[36m🐳 Building with Docker Linux container...\033[0m\n")
+	fmt.Printf("      \033[36m📥 Downloading and building packages...\033[0m\n")
+
+	// Run nix-build inside Docker container
+	cmd := exec.Command("docker", "run", "--rm",
+		"-v", fmt.Sprintf("%s:/workspace", tempDir),
+		"-v", "/nix:/nix", // Share Nix store (if exists on host)
+		"-v", "/tmp:/tmp", // Share temp directory
+		"--platform", "linux/amd64", // Force AMD64 platform for consistency
+		"nixos/nix:latest",
+		"nix-build", "--no-link", "/workspace/image.nix")
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// Show progress indication during build
-	fmt.Printf("      \033[36m⏳ This may take 5-15 minutes depending on your system...\033[0m\n")
-	fmt.Printf("      \033[36m📥 Downloading and building packages...\033[0m\n")
-
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("nix-build failed: %v\nstderr: %s", err, stderr.String())
+		return "", fmt.Errorf("docker nix-build failed: %v\nstderr: %s", err, stderr.String())
 	}
 
 	output := strings.TrimSpace(stdout.String())
 	if output == "" {
-		return "", fmt.Errorf("nix-build produced no output")
+		return "", fmt.Errorf("docker nix-build produced no output")
 	}
 
 	// Get the last line of output which should be the path to the built image
@@ -280,4 +326,31 @@ func (n *Nix) Build(filename string) (string, error) {
 	imagePath := strings.TrimSpace(lines[len(lines)-1])
 
 	return imagePath, nil
+}
+
+func (n *Nix) copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}
+
+func (n *Nix) updateTarPathInNixFile(nixFile, oldPath, newPath string) error {
+	content, err := os.ReadFile(nixFile)
+	if err != nil {
+		return err
+	}
+
+	updatedContent := strings.ReplaceAll(string(content), oldPath, newPath)
+	return os.WriteFile(nixFile, []byte(updatedContent), 0644)
 }

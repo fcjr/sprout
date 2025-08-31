@@ -79,7 +79,7 @@ func runGrow(cmd *cobra.Command, args []string) error {
 	printStep("🔨 Building NixOS image (this may take several minutes)...")
 	printSubStep("⏳ Running nix-build...")
 	buildStart := time.Now()
-	imagePath, err := nixInstance.Build(tempFileName)
+	imagePath, err := nixInstance.Build(tempFileName, config)
 	if err != nil {
 		return printError("failed to build Nix configuration: %w", err)
 	}
