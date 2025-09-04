@@ -246,14 +246,25 @@ func (n *Nix) buildAndSaveDockerImages(dockerConfig *DockerComposeConfig, workin
 			}
 		} else {
 			// Pull the image if it's not local using Docker client
-			// Specify ARM64 platform since we're building for aarch64-linux
+			// Try ARM64 first, fall back to default platform if that fails
 			pullOptions := image.PullOptions{
 				Platform: "linux/arm64",
 			}
 			reader, err := cli.ImagePull(ctx, img.Name, pullOptions)
 			if err != nil {
-				fmt.Printf("Warning: failed to pull image %s, assuming it exists locally: %v\n", img.Name, err)
+				fmt.Printf("      ARM64 image not available, trying default platform: %s\n", img.Name)
+				// Fallback to default platform (usually amd64)
+				pullOptions = image.PullOptions{}
+				reader, err = cli.ImagePull(ctx, img.Name, pullOptions)
+				if err != nil {
+					fmt.Printf("Warning: failed to pull image %s, assuming it exists locally: %v\n", img.Name, err)
+				} else {
+					// Consume the pull response to ensure the pull completes
+					io.Copy(io.Discard, reader)
+					reader.Close()
+				}
 			} else {
+				fmt.Printf("      Successfully pulled ARM64 image: %s\n", img.Name)
 				// Consume the pull response to ensure the pull completes
 				io.Copy(io.Discard, reader)
 				reader.Close()

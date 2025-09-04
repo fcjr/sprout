@@ -32,7 +32,7 @@ let
       services.openssh.enable = true;
       
       # Add git to system packages
-      environment.systemPackages = with pkgs; [{{- if .DockerCompose.Enabled }} docker-compose{{- end }}];
+      environment.systemPackages = with pkgs; [{{- if .DockerCompose.Enabled }} docker-compose{{- end }}{{- if .Autodiscovery }} avahi{{- end }}];
       
       # Enable Nix flakes
       nix.settings.experimental-features = [ "nix-command" "flakes" ];
@@ -127,14 +127,43 @@ let
 {{- end }}
       
 {{- if .Autodiscovery }}
+      # Enable Avahi for mDNS/DNS-SD
+      services.avahi = {
+        enable = true;
+        nssmdns = true;
+        publish = {
+          enable = true;
+          addresses = true;
+          domain = true;
+          hinfo = true;
+          userServices = true;
+          workstation = true;
+        };
+      };
+      
       # Copy Sprout binary to the system
       environment.etc."sprout/sprout".source = {{ .SproutBinaryPath }};
       environment.etc."sprout/sprout".mode = "0755";
       
+      # Create Avahi service file for Sprout
+      environment.etc."avahi/services/sprout.service".text = ''
+        <?xml version="1.0" standalone='no'?>
+        <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+        <service-group>
+          <name replace-wildcards="yes">Sprout on %h</name>
+          <service>
+            <type>_sprout._tcp</type>
+            <port>8080</port>
+            <txt-record>sprout discovery service</txt-record>
+          </service>
+        </service-group>
+      '';
+      
       # Create systemd service for Sprout daemon
       systemd.services.sprout-daemon = {
         description = "Sprout Discovery Daemon";
-        after = [ "network.target" ];
+        after = [ "network.target" "avahi-daemon.service" ];
+        wants = [ "avahi-daemon.service" ];
         wantedBy = [ "multi-user.target" ];
         serviceConfig = {
           Type = "simple";
