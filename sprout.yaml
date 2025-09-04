@@ -1,0 +1,13 @@
+# Basic Sprout configuration for NixOS Pi image with autodiscovery
+ssh_keys: []
+
+wireless:
+  enabled: false
+
+output:
+  path: "build/image.img"
+
+docker_compose:
+  enabled: false
+
+autodiscovery: true

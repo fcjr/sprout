@@ -102,7 +102,7 @@ func runBurn(cmd *cobra.Command, args []string) error {
 		if disk.Mountpoint != "" {
 			status = fmt.Sprintf(" (mounted at %s)", disk.Mountpoint)
 		}
-		fmt.Printf("  %s%d.%s %s - %s - %s%s%s\n", 
+		fmt.Printf("  %s%d.%s %s - %s - %s%s%s\n",
 			Cyan, i+1, Reset, disk.Device, disk.Size, disk.Name, status, Reset)
 	}
 
@@ -123,16 +123,16 @@ func runBurn(cmd *cobra.Command, args []string) error {
 
 	// Final confirmation
 	if !force {
-		fmt.Printf("\n%s⚠️  WARNING: This will completely erase all data on %s (%s)%s\n", 
+		fmt.Printf("\n%s⚠️  WARNING: This will completely erase all data on %s (%s)%s\n",
 			Red, selectedDisk.Device, selectedDisk.Name, Reset)
 		fmt.Printf("%sDo you want to continue? (yes/no): %s", Bold, Reset)
-		
+
 		reader := bufio.NewReader(os.Stdin)
 		response, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read input: %w", err)
 		}
-		
+
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "yes" && response != "y" {
 			fmt.Printf("Operation cancelled.\n")
@@ -157,14 +157,14 @@ func runBurn(cmd *cobra.Command, args []string) error {
 		fmt.Printf("%sUsing safe mode (8MB blocks, full sync)...%s\n", Yellow, Reset)
 	}
 	fmt.Printf("%sThis may take several minutes...%s\n\n", Yellow, Reset)
-	
+
 	if err := burnImage(imagePath, selectedDisk, fast); err != nil {
 		return fmt.Errorf("failed to burn image: %w", err)
 	}
 
 	fmt.Printf("\n%s%s✅ Successfully burned image to %s!%s\n", Bold, Green, selectedDisk.Device, Reset)
 	fmt.Printf("%sYou can now safely remove the SD card and use it in your device.%s\n", Green, Reset)
-	
+
 	return nil
 }
 
@@ -181,9 +181,9 @@ func findImageFile(args []string) (string, error) {
 
 	sproutFile := filepath.Join(cwd, "sprout.yaml")
 	if _, err := os.Stat(sproutFile); err == nil {
-		// sprout.yaml exists, try to load it
+		// sprout.yaml exists, try to load it (lightweight - no Docker processing)
 		nixInstance := &nix.Nix{}
-		config, err := nixInstance.LoadSproutFileFromYAML(sproutFile)
+		config, err := nixInstance.LoadSproutFileFromYAMLLightweight(sproutFile)
 		if err != nil {
 			fmt.Printf("%sWarning: Found sprout.yaml but failed to load it: %v%s\n", Yellow, err, Reset)
 		} else if config.Output.Path != "" {
@@ -218,7 +218,7 @@ func findImageFile(args []string) (string, error) {
 	}
 
 	if len(imgFiles) == 0 {
-		return "", fmt.Errorf("no sprout.yaml found and no .img files found in current directory\n"+
+		return "", fmt.Errorf("no sprout.yaml found and no .img files found in current directory\n" +
 			"Hint: Create a sprout.yaml file and run 'sprout seed' to build an image, or specify an image file directly")
 	}
 
@@ -275,25 +275,25 @@ func detectRemovableDisksMacOS() ([]DiskInfo, error) {
 
 	lines := strings.Split(string(output), "\n")
 	var disks []DiskInfo
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "/dev/disk") && strings.Contains(line, "external") {
 			parts := strings.Fields(line)
 			if len(parts) >= 3 {
 				device := parts[0]
-				
+
 				// Get detailed info for this disk
 				diskInfo, err := getMacOSDiskInfo(device)
 				if err != nil {
 					continue
 				}
-				
+
 				// Skip large disks (likely system disks)
 				if diskInfo.SizeBytes > 256*1024*1024*1024 { // 256 GB
 					continue
 				}
-				
+
 				disks = append(disks, *diskInfo)
 			}
 		}
@@ -319,13 +319,13 @@ func detectRemovableDisksLinux() ([]DiskInfo, error) {
 
 	lines := strings.Split(string(output), "\n")
 	var disks []DiskInfo
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		fields := strings.Fields(line)
 		if len(fields) >= 5 && fields[4] == "1" && fields[3] == "disk" {
 			device := "/dev/" + fields[0]
@@ -334,15 +334,15 @@ func detectRemovableDisksLinux() ([]DiskInfo, error) {
 			if len(fields) > 2 && fields[2] != "" {
 				mountpoint = fields[2]
 			}
-			
+
 			// Get size in bytes for comparison
 			sizeBytes, _ := parseSize(size)
-			
+
 			// Skip large disks (likely system disks)
 			if sizeBytes > 256*1024*1024*1024 { // 256 GB
 				continue
 			}
-			
+
 			disks = append(disks, DiskInfo{
 				Device:     device,
 				Size:       size,
@@ -366,7 +366,7 @@ func getMacOSDiskInfo(device string) (*DiskInfo, error) {
 
 	lines := strings.Split(string(output), "\n")
 	info := &DiskInfo{Device: device}
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.Contains(line, "Disk Size:") {
@@ -409,7 +409,7 @@ func getMacOSDiskInfo(device string) (*DiskInfo, error) {
 
 func parseSize(sizeStr string) (uint64, error) {
 	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
-	
+
 	var multiplier uint64 = 1
 	if strings.HasSuffix(sizeStr, "K") {
 		multiplier = 1024
@@ -424,36 +424,36 @@ func parseSize(sizeStr string) (uint64, error) {
 		multiplier = 1024 * 1024 * 1024 * 1024
 		sizeStr = sizeStr[:len(sizeStr)-1]
 	}
-	
+
 	size, err := strconv.ParseFloat(sizeStr, 64)
 	if err != nil {
 		return 0, err
 	}
-	
+
 	return uint64(size * float64(multiplier)), nil
 }
 
 func selectDisk(disks []DiskInfo) (*DiskInfo, error) {
 	reader := bufio.NewReader(os.Stdin)
-	
+
 	for {
 		fmt.Printf("\n%sSelect a disk to burn to (1-%d, or 'q' to quit): %s", Bold, len(disks), Reset)
 		input, err := reader.ReadString('\n')
 		if err != nil {
 			return nil, fmt.Errorf("failed to read input: %w", err)
 		}
-		
+
 		input = strings.TrimSpace(input)
 		if input == "q" || input == "quit" {
 			return nil, fmt.Errorf("operation cancelled")
 		}
-		
+
 		choice, err := strconv.Atoi(input)
 		if err != nil || choice < 1 || choice > len(disks) {
 			fmt.Printf("%sInvalid selection. Please enter a number between 1 and %d.%s\n", Red, len(disks), Reset)
 			continue
 		}
-		
+
 		return &disks[choice-1], nil
 	}
 }
@@ -489,40 +489,40 @@ func unmountDisk(disk *DiskInfo) error {
 
 func burnImage(imagePath string, disk *DiskInfo, fast bool) error {
 	var cmd *exec.Cmd
-	
+
 	switch runtime.GOOS {
 	case "darwin":
 		if fast {
 			// Ultra-fast mode: 16MB blocks, no sync during write
-			cmd = exec.Command("sudo", "dd", 
-				fmt.Sprintf("if=%s", imagePath), 
-				fmt.Sprintf("of=%s", disk.Device), 
+			cmd = exec.Command("sudo", "dd",
+				fmt.Sprintf("if=%s", imagePath),
+				fmt.Sprintf("of=%s", disk.Device),
 				"bs=16m",       // 16MB blocks for maximum speed
 				"conv=notrunc") // No sync during write
 		} else {
 			// Safe mode: 8MB blocks with sync
-			cmd = exec.Command("sudo", "dd", 
-				fmt.Sprintf("if=%s", imagePath), 
-				fmt.Sprintf("of=%s", disk.Device), 
-				"bs=8m",        // 8MB blocks 
+			cmd = exec.Command("sudo", "dd",
+				fmt.Sprintf("if=%s", imagePath),
+				fmt.Sprintf("of=%s", disk.Device),
+				"bs=8m",        // 8MB blocks
 				"conv=notrunc", // Don't truncate
 				"oflag=sync")   // Sync writes for reliability
 		}
 	case "linux":
 		if fast {
 			// Ultra-fast mode: 16MB blocks, no metadata sync
-			cmd = exec.Command("sudo", "dd", 
-				fmt.Sprintf("if=%s", imagePath), 
-				fmt.Sprintf("of=%s", disk.Device), 
+			cmd = exec.Command("sudo", "dd",
+				fmt.Sprintf("if=%s", imagePath),
+				fmt.Sprintf("of=%s", disk.Device),
 				"bs=16M",       // 16MB blocks for maximum speed
 				"conv=notrunc", // No conversion, faster
 				"oflag=direct", // Direct I/O, bypasses cache
 				"status=progress")
 		} else {
 			// Safe mode: 8MB blocks with data sync
-			cmd = exec.Command("sudo", "dd", 
-				fmt.Sprintf("if=%s", imagePath), 
-				fmt.Sprintf("of=%s", disk.Device), 
+			cmd = exec.Command("sudo", "dd",
+				fmt.Sprintf("if=%s", imagePath),
+				fmt.Sprintf("of=%s", disk.Device),
 				"bs=8M",          // 8MB blocks
 				"conv=fdatasync", // Only sync data, not metadata
 				"status=progress")
@@ -530,9 +530,9 @@ func burnImage(imagePath string, disk *DiskInfo, fast bool) error {
 	default:
 		return fmt.Errorf("unsupported platform")
 	}
-	
+
 	cmd.Stdin = os.Stdin // For sudo password prompt
-	
+
 	// Run the dd command with progress monitoring
 	err := runWithProgress(cmd, imagePath, disk)
 	if err != nil {
@@ -543,7 +543,7 @@ func burnImage(imagePath string, disk *DiskInfo, fast bool) error {
 			"- Hardware write protection on the SD card\n"+
 			"- Corrupted image file", err)
 	}
-	
+
 	// Sync to ensure all data is written
 	fmt.Printf("\n%sSyncing filesystem...%s\n", Bold, Reset)
 	var syncCmd *exec.Cmd
@@ -553,7 +553,7 @@ func burnImage(imagePath string, disk *DiskInfo, fast bool) error {
 	case "linux":
 		syncCmd = exec.Command("sync")
 	}
-	
+
 	if syncCmd != nil {
 		if syncErr := syncCmd.Run(); syncErr != nil {
 			fmt.Printf("%sWarning: sync failed: %v%s\n", Yellow, syncErr, Reset)
@@ -561,7 +561,7 @@ func burnImage(imagePath string, disk *DiskInfo, fast bool) error {
 			fmt.Printf("%s✓ Filesystem synced%s\n", Green, Reset)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -608,26 +608,26 @@ func runWithProgress(cmd *exec.Cmd, imagePath string, disk *DiskInfo) error {
 				return
 			case <-ticker.C:
 				elapsed := time.Since(startTime)
-				
+
 				// Try to get current bytes written by checking device size
 				// This is approximate but gives users feedback
 				currentBytes := getApproximateBytesWritten(disk.Device, elapsed, imageSize)
-				
+
 				// Calculate speed
 				speed := int64(0)
 				if elapsed.Seconds() > 0 {
 					speed = currentBytes / int64(elapsed.Seconds())
 				}
-				
+
 				// Calculate percentage
 				percentage := float64(currentBytes) / float64(imageSize) * 100
 				if percentage > 100 {
 					percentage = 100
 				}
-				
+
 				// Show progress
-				fmt.Printf("\r%s⏳ Burning... %.1f%% (%s / %s) %s/s - %s elapsed%s", 
-					Bold, percentage, 
+				fmt.Printf("\r%s⏳ Burning... %.1f%% (%s / %s) %s/s - %s elapsed%s",
+					Bold, percentage,
 					formatBytes(currentBytes), formatBytes(imageSize),
 					formatBytes(speed), formatDuration(elapsed), Reset)
 			}
@@ -637,7 +637,7 @@ func runWithProgress(cmd *exec.Cmd, imagePath string, disk *DiskInfo) error {
 	// Wait for dd to complete
 	err = cmd.Wait()
 	totalTime := time.Since(startTime)
-	
+
 	// Signal progress monitoring to stop
 	progressDone <- true
 	wg.Wait()
@@ -647,8 +647,8 @@ func runWithProgress(cmd *exec.Cmd, imagePath string, disk *DiskInfo) error {
 	if totalTime.Seconds() > 0 {
 		avgSpeed = imageSize / int64(totalTime.Seconds())
 	}
-	
-	fmt.Printf("%s✓ Burn completed in %s (avg: %s/s)%s\n", 
+
+	fmt.Printf("%s✓ Burn completed in %s (avg: %s/s)%s\n",
 		Green, formatDuration(totalTime), formatBytes(avgSpeed), Reset)
 
 	return err
@@ -658,37 +658,36 @@ func getApproximateBytesWritten(device string, elapsed time.Duration, totalSize 
 	// This is a rough estimation based on elapsed time
 	// In reality, we'd need more sophisticated monitoring to get exact bytes
 	// But this gives users a sense of progress
-	
+
 	// Assume roughly linear progress (which isn't accurate but better than nothing)
 	// We'll be conservative and assume it takes longer than it actually does
 	estimatedTotalTime := 300 * time.Second // Assume 5 minutes for a typical image
-	
+
 	if elapsed >= estimatedTotalTime {
 		return totalSize
 	}
-	
+
 	progress := float64(elapsed) / float64(estimatedTotalTime)
 	if progress > 1.0 {
 		progress = 1.0
 	}
-	
+
 	return int64(float64(totalSize) * progress)
 }
 
-
 func listAvailableDisks() error {
 	fmt.Printf("Available storage devices:\n\n")
-	
+
 	disks, err := detectRemovableDisks()
 	if err != nil {
 		return fmt.Errorf("failed to detect disks: %w", err)
 	}
-	
+
 	if len(disks) == 0 {
 		fmt.Printf("No removable storage devices found.\n")
 		return nil
 	}
-	
+
 	for _, disk := range disks {
 		status := ""
 		if disk.Mountpoint != "" {
@@ -696,6 +695,6 @@ func listAvailableDisks() error {
 		}
 		fmt.Printf("  %s - %s - %s%s\n", disk.Device, disk.Size, disk.Name, status)
 	}
-	
+
 	return nil
 }

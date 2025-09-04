@@ -37,6 +37,12 @@ let
       # Enable Nix flakes
       nix.settings.experimental-features = [ "nix-command" "flakes" ];
       
+      # Raspberry Pi optimizations
+      boot.kernelParams = [
+        "cgroup_memory=1"
+        "cgroup_enable=memory"
+      ];
+
 {{- if .DockerCompose.Enabled }}
       # Enable Docker with minimal configuration to save space
       virtualisation.docker.enable = true;
@@ -118,6 +124,28 @@ let
 {{- end }}
       };
 {{- end }}
+{{- end }}
+      
+{{- if .Autodiscovery }}
+      # Copy Sprout binary to the system
+      environment.etc."sprout/sprout".source = {{ .SproutBinaryPath }};
+      environment.etc."sprout/sprout".mode = "0755";
+      
+      # Create systemd service for Sprout daemon
+      systemd.services.sprout-daemon = {
+        description = "Sprout Discovery Daemon";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig = {
+          Type = "simple";
+          ExecStart = "/etc/sprout/sprout daemon --quiet --hostname sprout-node";
+          Restart = "always";
+          RestartSec = "10";
+          User = "root";
+          StandardOutput = "journal";
+          StandardError = "journal";
+        };
+      };
 {{- end }}
     };
   };

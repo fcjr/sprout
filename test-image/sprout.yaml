@@ -1,0 +1,18 @@
+docker_compose:
+  enabled: true
+  path: "./docker-compose.yaml"
+
+autodiscovery: true
+
+ssh_keys:
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGhBgDfImfTT4FQX6feRvOtkFJWPswFo7EG5VGjYDOs4"
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHkAPpDpSf1YHbwvwj7EJq+DMCrq0nLwdVFA5JR+V/lI"
+
+wireless:
+  enabled: true
+  networks:
+    "Recurse Center":
+      psk: "some-real-password"
+
+output:
+  path: "out/sd-image.img"

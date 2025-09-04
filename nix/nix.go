@@ -104,6 +104,24 @@ func (n *Nix) LoadSproutFileFromYAML(filename string) (*SproutFile, error) {
 	return &sproutFile, nil
 }
 
+// LoadSproutFileFromYAMLLightweight loads the YAML config without processing Docker images
+// This is useful for commands that only need basic config info (like burn command)
+func (n *Nix) LoadSproutFileFromYAMLLightweight(filename string) (*SproutFile, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var sproutFile SproutFile
+	err = yaml.Unmarshal(data, &sproutFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// Skip Docker processing - just return the basic config
+	return &sproutFile, nil
+}
+
 func (n *Nix) processDockerComposeImages(dockerConfig *DockerComposeConfig, composePath string) error {
 	// Parse docker-compose file using compose-go CLI
 	projectName := "sprout-embedded"
@@ -228,7 +246,10 @@ func (n *Nix) buildAndSaveDockerImages(dockerConfig *DockerComposeConfig, workin
 			}
 		} else {
 			// Pull the image if it's not local using Docker client
-			pullOptions := image.PullOptions{}
+			// Specify ARM64 platform since we're building for aarch64-linux
+			pullOptions := image.PullOptions{
+				Platform: "linux/arm64",
+			}
 			reader, err := cli.ImagePull(ctx, img.Name, pullOptions)
 			if err != nil {
 				fmt.Printf("Warning: failed to pull image %s, assuming it exists locally: %v\n", img.Name, err)
@@ -290,7 +311,7 @@ func (n *Nix) GenerateImage(sproutFile SproutFile) (string, error) {
 // BuildSproutBinary builds the Sprout binary for ARM64 Linux
 func (n *Nix) BuildSproutBinary() (string, error) {
 	fmt.Printf("      \033[36mBuilding Sprout binary for ARM64...\033[0m\n")
-	
+
 	// Create temporary directory for the binary
 	tempDir, err := os.MkdirTemp("", "sprout-binary-*")
 	if err != nil {
@@ -300,7 +321,7 @@ func (n *Nix) BuildSproutBinary() (string, error) {
 	// Build the binary for ARM64 Linux
 	binaryPath := filepath.Join(tempDir, "sprout")
 	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/sprout/main.go")
-	cmd.Dir = "/Users/fcjr/git/sprout"  // Set working directory to the module root
+	cmd.Dir = "/Users/fcjr/git/sprout" // Set working directory to the module root
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux",
 		"GOARCH=arm64",
