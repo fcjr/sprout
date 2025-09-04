@@ -1,17 +1,25 @@
-package sprout
+package config
 
-type Config struct {
-	Server []ServerConfig `toml:"server"`
-}
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+)
 
-type ServerConfig struct {
-	Name          string        `toml:"name"`
-	Host          string        `toml:"host"`
-	Port          int           `toml:"port"`
-	NetworkConfig NetworkConfig `toml:"network"`
-}
-
-type NetworkConfig struct {
-	NetworkType string `toml:"type"`
-	NetworkName string `toml:"name"`
+func Folder() (string, error) {
+	var configPath string
+	switch runtime.GOOS {
+	case "windows":
+		configPath = os.Getenv("APPDATA")
+	default:
+		configPath = os.Getenv("XDG_CONFIG_HOME")
+	}
+	if configPath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		configPath = filepath.Join(home, ".config")
+	}
+	return filepath.Join(configPath, "sprout"), nil
 }

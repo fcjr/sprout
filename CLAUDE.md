@@ -20,7 +20,7 @@ Sprout is a CLI tool that generates NixOS SD card images from YAML configuration
 
 - **CLI Layer** (`cmd/sprout/main.go`, `internal/cmd/`): Built with Cobra framework
   - `root.go`: Base command with 15-second timeout, version handling
-  - `grow.go`: Main command that processes `sprout.yaml` files and builds NixOS images
+  - `seed.go`: Main command that processes `sprout.yaml` files and builds NixOS images
   - `man.go`: Man page generation command
 
 - **Nix Integration** (`nix/nix.go`, `nix/image.nix.tmpl`):
@@ -34,7 +34,7 @@ Sprout is a CLI tool that generates NixOS SD card images from YAML configuration
 ### Workflow
 
 1. User creates `sprout.yaml` with SSH keys, wireless config, and output path
-2. `sprout grow` command loads the YAML configuration
+2. `sprout seed` command loads the YAML configuration
 3. Nix template is populated with user configuration
 4. `nix-build` creates ARM64 NixOS installer image with SSH access enabled
 5. Built image is copied from Nix store to user-specified location (default: `build/image.img`)

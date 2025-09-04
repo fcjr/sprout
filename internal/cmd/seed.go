@@ -12,21 +12,22 @@ import (
 )
 
 func init() {
-	rootCmd.AddCommand(growCmd)
+	rootCmd.AddCommand(seedCmd)
 }
 
-var growCmd = &cobra.Command{
-	Use:   "grow",
-	Short: "Grow a NixOS image from sprout.yaml configuration",
-	RunE:  runGrow,
+var seedCmd = &cobra.Command{
+	Use:     "seed",
+	Aliases: []string{"image"},
+	Short:   "Seed a NixOS image from sprout.yaml configuration",
+	RunE:    runSeed,
 }
 
-func runGrow(cmd *cobra.Command, args []string) error {
+func runSeed(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 	printHeader()
 
 	// Get current working directory
-	printStep("📂 Finding current directory...")
+	printStep("Finding current directory...")
 	cwd, err := os.Getwd()
 	if err != nil {
 		return printError("failed to get current working directory: %w", err)
@@ -42,16 +43,16 @@ func runGrow(cmd *cobra.Command, args []string) error {
 	printSuccess("Found sprout.yaml")
 
 	// Load configuration from YAML
-	printStep("📋 Loading configuration...")
+	printStep("Loading configuration...")
 	nixInstance := &nix.Nix{}
-	config, err := nixInstance.LoadConfigFromYAML(sproutFile)
+	config, err := nixInstance.LoadSproutFileFromYAML(sproutFile)
 	if err != nil {
 		return printError("failed to load configuration from sprout.yaml: %w", err)
 	}
 	printConfigInfo(config)
 
 	// Generate the Nix configuration
-	printStep("⚙️  Generating Nix configuration...")
+	printStep("Generating Nix configuration...")
 	nixConfig, err := nixInstance.GenerateImage(*config)
 	if err != nil {
 		return printError("failed to generate Nix configuration: %w", err)
@@ -59,7 +60,7 @@ func runGrow(cmd *cobra.Command, args []string) error {
 	printSuccess("Nix configuration generated")
 
 	// Create temporary file
-	printStep("📝 Creating temporary Nix file...")
+	printStep("Creating temporary Nix file...")
 	tempFile, err := os.CreateTemp("", "image-*.nix")
 	if err != nil {
 		return printError("failed to create temporary file: %w", err)
@@ -76,8 +77,8 @@ func runGrow(cmd *cobra.Command, args []string) error {
 	printSuccess(fmt.Sprintf("Configuration written to %s", tempFileName))
 
 	// Build the Nix configuration
-	printStep("🔨 Building NixOS image (this may take several minutes)...")
-	printSubStep("⏳ Running nix-build...")
+	printStep("Building NixOS image (this may take several minutes)...")
+	printSubStep("Running nix-build...")
 	buildStart := time.Now()
 	imagePath, err := nixInstance.Build(tempFileName, config)
 	if err != nil {
@@ -85,7 +86,7 @@ func runGrow(cmd *cobra.Command, args []string) error {
 	}
 	buildDuration := time.Since(buildStart)
 	printSuccess(fmt.Sprintf("Image built in %v", formatDuration(buildDuration)))
-	printSubStep(fmt.Sprintf("📍 Image location: %s", imagePath))
+	printSubStep(fmt.Sprintf("Image location: %s", imagePath))
 
 	// Set default output path if not specified
 	outputPath := config.Output.Path
@@ -98,26 +99,26 @@ func runGrow(cmd *cobra.Command, args []string) error {
 		outputPath = filepath.Join(cwd, outputPath)
 	}
 
-	printStep("📦 Preparing output location...")
-	printSubStep(fmt.Sprintf("📍 Destination: %s", outputPath))
+	printStep("Preparing output location...")
+	printSubStep(fmt.Sprintf("Destination: %s", outputPath))
 
 	// Ensure the output directory exists
 	outputDir := filepath.Dir(outputPath)
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return printError("failed to create output directory: %w", err)
 	}
-	printSubStep("✅ Output directory ready")
+	printSubStep("Output directory ready")
 
 	// Find the actual image file inside the directory
-	printSubStep("🔍 Locating image file...")
-	actualImagePath, err := findImageFile(imagePath)
+	printSubStep("Locating image file...")
+	actualImagePath, err := nix.FindImageFile(imagePath)
 	if err != nil {
 		return printError("failed to find image file: %w", err)
 	}
-	printSubStep(fmt.Sprintf("📍 Found: %s", filepath.Base(actualImagePath)))
+	printSubStep(fmt.Sprintf("Found: %s", filepath.Base(actualImagePath)))
 
 	// Copy the actual image file
-	printStep("📋 Copying image file...")
+	printStep("Copying image file...")
 	copyStart := time.Now()
 	if err := copyFileWithProgress(actualImagePath, outputPath); err != nil {
 		return printError("failed to copy image to output path: %w", err)
@@ -127,30 +128,6 @@ func runGrow(cmd *cobra.Command, args []string) error {
 	totalDuration := time.Since(startTime)
 	printFinalSuccess(outputPath, totalDuration, copyDuration)
 	return nil
-}
-
-func findImageFile(basePath string) (string, error) {
-	sdImageDir := filepath.Join(basePath, "sd-image")
-
-	// Check if sd-image directory exists
-	if _, err := os.Stat(sdImageDir); os.IsNotExist(err) {
-		return "", fmt.Errorf("sd-image directory not found in %s", basePath)
-	}
-
-	// List files in sd-image directory
-	entries, err := os.ReadDir(sdImageDir)
-	if err != nil {
-		return "", fmt.Errorf("failed to read sd-image directory: %w", err)
-	}
-
-	// Find the .img file
-	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".img" {
-			return filepath.Join(sdImageDir, entry.Name()), nil
-		}
-	}
-
-	return "", fmt.Errorf("no .img file found in sd-image directory")
 }
 
 // Color constants
@@ -179,17 +156,17 @@ func printSubStep(message string) {
 }
 
 func printSuccess(message string) {
-	fmt.Printf("  %s✅ %s%s\n", Green, message, Reset)
+	fmt.Printf("  %s%s%s\n", Green, message, Reset)
 }
 
 func printError(format string, args ...any) error {
 	err := fmt.Errorf(format, args...)
-	fmt.Printf("\n%s❌ Error: %s%s\n", Red, err.Error(), Reset)
+	fmt.Printf("\n%sError: %s%s\n", Red, err.Error(), Reset)
 	return err
 }
 
-func printConfigInfo(config *nix.ImageConfig) {
-	fmt.Printf("  %s✅ Configuration loaded%s\n", Green, Reset)
+func printConfigInfo(config *nix.SproutFile) {
+	fmt.Printf("  %sConfiguration loaded%s\n", Green, Reset)
 	fmt.Printf("    %s• SSH Keys: %d%s\n", Cyan, len(config.SSHKeys), Reset)
 	if config.Wireless.Enabled {
 		fmt.Printf("    %s• Wireless: %d network(s)%s\n", Cyan, len(config.Wireless.Networks), Reset)
@@ -212,12 +189,12 @@ func formatDuration(d time.Duration) string {
 }
 
 func printFinalSuccess(outputPath string, totalDuration, copyDuration time.Duration) {
-	fmt.Printf("\n%s%s🎉 Build Complete!%s\n", Bold, Green, Reset)
+	fmt.Printf("\n%s%sBuild Complete!%s\n", Bold, Green, Reset)
 	fmt.Printf("%s%s════════════════%s\n", Bold, Green, Reset)
-	fmt.Printf("%s📁 Image saved to: %s%s%s\n", Bold, Green, outputPath, Reset)
-	fmt.Printf("%s⏱️  Total time: %s%s\n", Bold, formatDuration(totalDuration), Reset)
-	fmt.Printf("%s📋 Copy time: %s%s\n", Bold, formatDuration(copyDuration), Reset)
-	fmt.Printf("\n%s💡 You can now flash this image to an SD card!%s\n", Yellow, Reset)
+	fmt.Printf("%sImage saved to: %s%s%s\n", Bold, Green, outputPath, Reset)
+	fmt.Printf("%sTotal time: %s%s\n", Bold, formatDuration(totalDuration), Reset)
+	fmt.Printf("%sCopy time: %s%s\n", Bold, formatDuration(copyDuration), Reset)
+	fmt.Printf("\n%sYou can now flash this image to an SD card!%s\n", Yellow, Reset)
 }
 
 func copyFileWithProgress(src, dst string) error {
@@ -244,7 +221,7 @@ func copyFileWithProgress(src, dst string) error {
 	buffer := make([]byte, 1024*1024) // 1MB buffer
 	var totalCopied int64
 
-	printSubStep("📊 Starting copy...")
+	printSubStep("Starting copy...")
 
 	for {
 		n, err := sourceFile.Read(buffer)
@@ -259,7 +236,7 @@ func copyFileWithProgress(src, dst string) error {
 			if totalCopied%10485760 == 0 || err == io.EOF {
 				percentage := float64(totalCopied) / float64(fileSize) * 100
 				// Clear the line and print progress
-				fmt.Printf("\r\033[K  %s📊 Progress: %.1f%% (%s / %s)%s",
+				fmt.Printf("\r\033[K  %sProgress: %.1f%% (%s / %s)%s",
 					Cyan, percentage,
 					formatBytes(totalCopied), formatBytes(fileSize), Reset)
 			}
