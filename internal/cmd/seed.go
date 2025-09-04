@@ -51,6 +51,18 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	}
 	printConfigInfo(config)
 
+	// Build Sprout binary if autodiscovery is enabled
+	if config.Autodiscovery {
+		printStep("Building Sprout binary for ARM64...")
+		binaryPath, err := nixInstance.BuildSproutBinary()
+		if err != nil {
+			return printError("failed to build Sprout binary: %w", err)
+		}
+		config.SproutBinaryPath = binaryPath
+		defer os.RemoveAll(filepath.Dir(binaryPath)) // Clean up temp directory
+		printSuccess("Sprout binary built")
+	}
+
 	// Generate the Nix configuration
 	printStep("Generating Nix configuration...")
 	nixConfig, err := nixInstance.GenerateImage(*config)
@@ -173,6 +185,9 @@ func printConfigInfo(config *nix.SproutFile) {
 	}
 	if config.DockerCompose.Enabled {
 		fmt.Printf("    %s• Docker Compose: enabled%s\n", Cyan, Reset)
+	}
+	if config.Autodiscovery {
+		fmt.Printf("    %s• Autodiscovery: enabled%s\n", Cyan, Reset)
 	}
 }
 

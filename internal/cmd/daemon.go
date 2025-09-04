@@ -46,7 +46,7 @@ This daemon is typically run as a systemd service on NixOS installations.`,
 
 		if !quiet {
 			fmt.Printf("✓ Sprout daemon started successfully\n")
-			fmt.Printf("  Service: _sprout_autodiscovery._tcp\n")
+			fmt.Printf("  Service: %s\n", discovery.ServiceName)
 			fmt.Printf("  Announcing on mDNS/Bonjour\n\n")
 			fmt.Printf("Press Ctrl+C to stop the daemon\n")
 		}
