@@ -58,10 +58,12 @@ type DockerComposeConfig struct {
 }
 
 type SproutFile struct {
-	SSHKeys       []string            `yaml:"ssh_keys"`
-	Wireless      WirelessConfig      `yaml:"wireless"`
-	Output        OutputConfig        `yaml:"output"`
-	DockerCompose DockerComposeConfig `yaml:"docker_compose"`
+	SSHKeys          []string            `yaml:"ssh_keys"`
+	Wireless         WirelessConfig      `yaml:"wireless"`
+	Output           OutputConfig        `yaml:"output"`
+	DockerCompose    DockerComposeConfig `yaml:"docker_compose"`
+	Autodiscovery    bool                `yaml:"autodiscovery"`
+	SproutBinaryPath string              // Path to the built Sprout binary for embedding
 }
 
 func (n *Nix) LoadSproutFileFromYAML(filename string) (*SproutFile, error) {
@@ -283,6 +285,37 @@ func (n *Nix) GenerateImage(sproutFile SproutFile) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// BuildSproutBinary builds the Sprout binary for ARM64 Linux
+func (n *Nix) BuildSproutBinary() (string, error) {
+	fmt.Printf("      \033[36mBuilding Sprout binary for ARM64...\033[0m\n")
+	
+	// Create temporary directory for the binary
+	tempDir, err := os.MkdirTemp("", "sprout-binary-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+
+	// Build the binary for ARM64 Linux
+	binaryPath := filepath.Join(tempDir, "sprout")
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/sprout/main.go")
+	cmd.Dir = "/Users/fcjr/git/sprout"  // Set working directory to the module root
+	cmd.Env = append(os.Environ(),
+		"GOOS=linux",
+		"GOARCH=arm64",
+		"CGO_ENABLED=0",
+	)
+
+	// Get the build output for debugging
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		os.RemoveAll(tempDir)
+		return "", fmt.Errorf("failed to build Sprout binary: %w\nOutput: %s", err, output)
+	}
+
+	fmt.Printf("      \033[32m✓ Sprout binary built for ARM64\033[0m\n")
+	return binaryPath, nil
 }
 
 func (n *Nix) Build(filename string, sproutFile *SproutFile) (string, error) {
