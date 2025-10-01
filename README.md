@@ -227,3 +227,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Contributing
 
 This is pre-alpha software. Contributions, ideas, and feedback are welcome, but please note that the project is likely to undergo significant changes.
+
+---
+
+Made with ❤️ at the [Recurse Center](https://www.recurse.com/scout/click?t=ba46ea16fafed13b3f8ccacb0ce83ad1)
