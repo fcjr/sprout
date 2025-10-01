@@ -19,6 +19,13 @@
         ]
       ]
     },
+    "username": {
+      "type": "string",
+      "description": "Username for the created user account (defaults to 'sprout')",
+      "default": "sprout",
+      "pattern": "^[a-z_][a-z0-9_-]*$",
+      "examples": ["sprout", "pi", "admin"]
+    },
     "wireless": {
       "type": "object",
       "description": "Wireless network configuration",

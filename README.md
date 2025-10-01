@@ -136,6 +136,13 @@ ssh_keys:
 
 Add your public SSH keys to enable remote access.
 
+### Username
+```yaml
+username: sprout  # Optional, defaults to "sprout"
+```
+
+Customize the username for the created user account. The user will have sudo access and (if enabled) Docker permissions.
+
 ### Wireless Networks
 ```yaml
 wireless:

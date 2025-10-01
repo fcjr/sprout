@@ -32,6 +32,11 @@ func (n *Nix) loadConfig(filename string, processDocker bool) (*SproutFile, erro
 		return nil, err
 	}
 
+	// Set default username if not specified
+	if sproutFile.Username == "" {
+		sproutFile.Username = "sprout"
+	}
+
 	shouldProcess := processDocker && sproutFile.DockerCompose.Enabled && sproutFile.DockerCompose.Path != ""
 	if !shouldProcess {
 		return &sproutFile, nil

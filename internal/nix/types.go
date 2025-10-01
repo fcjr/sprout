@@ -31,6 +31,7 @@ type DockerComposeConfig struct {
 
 type SproutFile struct {
 	SSHKeys          []string            `yaml:"ssh_keys"`
+	Username         string              `yaml:"username"`
 	Wireless         WirelessConfig      `yaml:"wireless"`
 	Output           OutputConfig        `yaml:"output"`
 	DockerCompose    DockerComposeConfig `yaml:"docker_compose"`

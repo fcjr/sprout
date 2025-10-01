@@ -7,9 +7,9 @@ let
       ];
       
       system.stateVersion = "24.11";
-      # Create sprout user with SSH access
+      # Create user with SSH access
 {{- if .SSHKeys }}
-      users.users.sprout = {
+      users.users.{{ .Username }} = {
         isNormalUser = true;
         extraGroups = [ "wheel"{{- if .DockerCompose.Enabled }} "docker"{{- end }} ];
         openssh.authorizedKeys.keys = [
@@ -104,7 +104,7 @@ let
           ExecStart = "${pkgs.docker-compose}/bin/docker-compose up -d";
           ExecStop = "${pkgs.docker-compose}/bin/docker-compose down";
           TimeoutStartSec = "0";
-          User = "sprout";
+          User = "{{ .Username }}";
         };
       };
 {{- end }}
