@@ -45,7 +45,7 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	// Load configuration from YAML
 	printStep("Loading configuration...")
 	nixInstance := &nix.Nix{}
-	config, err := nixInstance.LoadSproutFileFromYAML(sproutFile)
+	config, err := nixInstance.LoadConfig(sproutFile)
 	if err != nil {
 		return printError("failed to load configuration from sprout.yaml: %w", err)
 	}

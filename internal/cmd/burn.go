@@ -12,18 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fcjr/sprout/internal/burn"
 	"github.com/fcjr/sprout/nix"
 	"github.com/spf13/cobra"
 )
-
-type DiskInfo struct {
-	Device     string
-	Size       string
-	SizeBytes  uint64
-	Name       string
-	Removable  bool
-	Mountpoint string
-}
 
 var burnCmd = &cobra.Command{
 	Use:   "burn [image-file]",
@@ -80,11 +72,11 @@ func runBurn(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get image file info: %w", err)
 	}
-	fmt.Printf("%sImage size: %s%s\n\n", Bold, formatBytes(imageInfo.Size()), Reset)
+	fmt.Printf("%sImage size: %s%s\n\n", Bold, burn.FormatBytes(imageInfo.Size()), Reset)
 
 	// Detect available disks
 	fmt.Printf("%sDetecting available storage devices...\n", Bold)
-	disks, err := detectRemovableDisks()
+	disks, err := burn.DetectRemovableDisks()
 	if err != nil {
 		return fmt.Errorf("failed to detect disks: %w", err)
 	}
@@ -96,18 +88,10 @@ func runBurn(cmd *cobra.Command, args []string) error {
 	}
 
 	// Display available disks
-	fmt.Printf("\n%sAvailable storage devices:%s\n", Bold, Reset)
-	for i, disk := range disks {
-		status := ""
-		if disk.Mountpoint != "" {
-			status = fmt.Sprintf(" (mounted at %s)", disk.Mountpoint)
-		}
-		fmt.Printf("  %s%d.%s %s - %s - %s%s%s\n",
-			Cyan, i+1, Reset, disk.Device, disk.Size, disk.Name, status, Reset)
-	}
+	burn.DisplayDisks(disks)
 
 	// Get user selection
-	var selectedDisk *DiskInfo
+	var selectedDisk *burn.DiskInfo
 	if !force {
 		selectedDisk, err = selectDisk(disks)
 		if err != nil {
@@ -142,7 +126,7 @@ func runBurn(cmd *cobra.Command, args []string) error {
 
 	// Always try to unmount the disk before burning
 	fmt.Printf("\n%sUnmounting %s...\n", Bold, selectedDisk.Device)
-	if err := unmountDisk(selectedDisk); err != nil {
+	if err := burn.UnmountDisk(selectedDisk); err != nil {
 		fmt.Printf("%sWarning: failed to unmount disk: %v%s\n", Yellow, err, Reset)
 		fmt.Printf("%sAttempting to continue anyway...%s\n", Yellow, Reset)
 	} else {
@@ -183,7 +167,7 @@ func findImageFile(args []string) (string, error) {
 	if _, err := os.Stat(sproutFile); err == nil {
 		// sprout.yaml exists, try to load it (lightweight - no Docker processing)
 		nixInstance := &nix.Nix{}
-		config, err := nixInstance.LoadSproutFileFromYAMLLightweight(sproutFile)
+		config, err := nixInstance.LoadConfigOnly(sproutFile)
 		if err != nil {
 			fmt.Printf("%sWarning: Found sprout.yaml but failed to load it: %v%s\n", Yellow, err, Reset)
 		} else if config.Output.Path != "" {
@@ -248,192 +232,7 @@ func findImageFile(args []string) (string, error) {
 	return filepath.Abs(imgFiles[choice-1].Name())
 }
 
-func detectRemovableDisks() ([]DiskInfo, error) {
-	switch runtime.GOOS {
-	case "darwin":
-		return detectRemovableDisksMacOS()
-	case "linux":
-		return detectRemovableDisksLinux()
-	default:
-		return nil, fmt.Errorf("unsupported platform: %s", runtime.GOOS)
-	}
-}
-
-func detectRemovableDisksMacOS() ([]DiskInfo, error) {
-	cmd := exec.Command("diskutil", "list", "-plist")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to run diskutil: %w", err)
-	}
-
-	// Parse diskutil output - for now, use a simpler approach
-	cmd = exec.Command("diskutil", "list")
-	output, err = cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to run diskutil: %w", err)
-	}
-
-	lines := strings.Split(string(output), "\n")
-	var disks []DiskInfo
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "/dev/disk") && strings.Contains(line, "external") {
-			parts := strings.Fields(line)
-			if len(parts) >= 3 {
-				device := parts[0]
-
-				// Get detailed info for this disk
-				diskInfo, err := getMacOSDiskInfo(device)
-				if err != nil {
-					continue
-				}
-
-				// Skip large disks (likely system disks)
-				if diskInfo.SizeBytes > 256*1024*1024*1024 { // 256 GB
-					continue
-				}
-
-				disks = append(disks, *diskInfo)
-			}
-		}
-	}
-
-	return disks, nil
-}
-
-func detectRemovableDisksLinux() ([]DiskInfo, error) {
-	cmd := exec.Command("lsblk", "-J", "-o", "NAME,SIZE,MOUNTPOINT,TYPE,REMOVABLE")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to run lsblk: %w", err)
-	}
-
-	// For simplicity, parse the output manually
-	// In production, you'd want to parse the JSON properly
-	cmd = exec.Command("lsblk", "-o", "NAME,SIZE,MOUNTPOINT,TYPE,REMOVABLE", "--noheadings")
-	output, err = cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to run lsblk: %w", err)
-	}
-
-	lines := strings.Split(string(output), "\n")
-	var disks []DiskInfo
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) >= 5 && fields[4] == "1" && fields[3] == "disk" {
-			device := "/dev/" + fields[0]
-			size := fields[1]
-			mountpoint := ""
-			if len(fields) > 2 && fields[2] != "" {
-				mountpoint = fields[2]
-			}
-
-			// Get size in bytes for comparison
-			sizeBytes, _ := parseSize(size)
-
-			// Skip large disks (likely system disks)
-			if sizeBytes > 256*1024*1024*1024 { // 256 GB
-				continue
-			}
-
-			disks = append(disks, DiskInfo{
-				Device:     device,
-				Size:       size,
-				SizeBytes:  sizeBytes,
-				Name:       fmt.Sprintf("Removable disk (%s)", size),
-				Removable:  true,
-				Mountpoint: mountpoint,
-			})
-		}
-	}
-
-	return disks, nil
-}
-
-func getMacOSDiskInfo(device string) (*DiskInfo, error) {
-	cmd := exec.Command("diskutil", "info", device)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-
-	lines := strings.Split(string(output), "\n")
-	info := &DiskInfo{Device: device}
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.Contains(line, "Disk Size:") {
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				sizeStr := strings.TrimSpace(parts[1])
-				info.Size = sizeStr
-				// Extract bytes from something like "31.9 GB (31914983424 Bytes)"
-				if idx := strings.Index(sizeStr, "("); idx != -1 {
-					if endIdx := strings.Index(sizeStr[idx:], " Bytes)"); endIdx != -1 {
-						bytesStr := sizeStr[idx+1 : idx+endIdx]
-						if bytes, err := strconv.ParseUint(bytesStr, 10, 64); err == nil {
-							info.SizeBytes = bytes
-						}
-					}
-				}
-			}
-		} else if strings.Contains(line, "Volume Name:") {
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				info.Name = strings.TrimSpace(parts[1])
-			}
-		} else if strings.Contains(line, "Mount Point:") {
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				mountpoint := strings.TrimSpace(parts[1])
-				if mountpoint != "Not applicable (no file system)" {
-					info.Mountpoint = mountpoint
-				}
-			}
-		}
-	}
-
-	if info.Name == "" {
-		info.Name = fmt.Sprintf("Disk (%s)", info.Size)
-	}
-
-	return info, nil
-}
-
-func parseSize(sizeStr string) (uint64, error) {
-	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
-
-	var multiplier uint64 = 1
-	if strings.HasSuffix(sizeStr, "K") {
-		multiplier = 1024
-		sizeStr = sizeStr[:len(sizeStr)-1]
-	} else if strings.HasSuffix(sizeStr, "M") {
-		multiplier = 1024 * 1024
-		sizeStr = sizeStr[:len(sizeStr)-1]
-	} else if strings.HasSuffix(sizeStr, "G") {
-		multiplier = 1024 * 1024 * 1024
-		sizeStr = sizeStr[:len(sizeStr)-1]
-	} else if strings.HasSuffix(sizeStr, "T") {
-		multiplier = 1024 * 1024 * 1024 * 1024
-		sizeStr = sizeStr[:len(sizeStr)-1]
-	}
-
-	size, err := strconv.ParseFloat(sizeStr, 64)
-	if err != nil {
-		return 0, err
-	}
-
-	return uint64(size * float64(multiplier)), nil
-}
-
-func selectDisk(disks []DiskInfo) (*DiskInfo, error) {
+func selectDisk(disks []burn.DiskInfo) (*burn.DiskInfo, error) {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -458,36 +257,7 @@ func selectDisk(disks []DiskInfo) (*DiskInfo, error) {
 	}
 }
 
-func unmountDisk(disk *DiskInfo) error {
-	switch runtime.GOOS {
-	case "darwin":
-		// First try to unmount all volumes on the disk
-		cmd := exec.Command("diskutil", "unmountDisk", "force", disk.Device)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			// If that fails, try individual volumes
-			return fmt.Errorf("failed to unmount disk: %w\nOutput: %s", err, output)
-		}
-		return nil
-	case "linux":
-		// Try to unmount the device
-		cmd := exec.Command("umount", disk.Device)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			// Try force unmount
-			cmd = exec.Command("umount", "-f", disk.Device)
-			output2, err2 := cmd.CombinedOutput()
-			if err2 != nil {
-				return fmt.Errorf("failed to unmount disk: %w\nOutput: %s\nForce unmount output: %s", err, output, output2)
-			}
-		}
-		return nil
-	default:
-		return fmt.Errorf("unsupported platform")
-	}
-}
-
-func burnImage(imagePath string, disk *DiskInfo, fast bool) error {
+func burnImage(imagePath string, disk *burn.DiskInfo, fast bool) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
@@ -565,7 +335,7 @@ func burnImage(imagePath string, disk *DiskInfo, fast bool) error {
 	return nil
 }
 
-func runWithProgress(cmd *exec.Cmd, imagePath string, disk *DiskInfo) error {
+func runWithProgress(cmd *exec.Cmd, imagePath string, disk *burn.DiskInfo) error {
 	// Get image size for progress calculation
 	imageInfo, err := os.Stat(imagePath)
 	if err != nil {
@@ -628,8 +398,8 @@ func runWithProgress(cmd *exec.Cmd, imagePath string, disk *DiskInfo) error {
 				// Show progress
 				fmt.Printf("\r%s⏳ Burning... %.1f%% (%s / %s) %s/s - %s elapsed%s",
 					Bold, percentage,
-					formatBytes(currentBytes), formatBytes(imageSize),
-					formatBytes(speed), formatDuration(elapsed), Reset)
+					burn.FormatBytes(currentBytes), burn.FormatBytes(imageSize),
+					burn.FormatBytes(speed), burn.FormatDuration(elapsed), Reset)
 			}
 		}
 	}()
@@ -649,7 +419,7 @@ func runWithProgress(cmd *exec.Cmd, imagePath string, disk *DiskInfo) error {
 	}
 
 	fmt.Printf("%s✓ Burn completed in %s (avg: %s/s)%s\n",
-		Green, formatDuration(totalTime), formatBytes(avgSpeed), Reset)
+		Green, burn.FormatDuration(totalTime), burn.FormatBytes(avgSpeed), Reset)
 
 	return err
 }
@@ -678,7 +448,7 @@ func getApproximateBytesWritten(device string, elapsed time.Duration, totalSize 
 func listAvailableDisks() error {
 	fmt.Printf("Available storage devices:\n\n")
 
-	disks, err := detectRemovableDisks()
+	disks, err := burn.DetectRemovableDisks()
 	if err != nil {
 		return fmt.Errorf("failed to detect disks: %w", err)
 	}

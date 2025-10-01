@@ -44,13 +44,11 @@ func NewServer(params *NewServerParams) (*Server, error) {
 		port = servicePort
 	}
 
-	// Get the local IP addresses to use for the mDNS service
 	ips, err := getLocalIPs()
 	if err != nil {
 		return nil, fmt.Errorf("could not determine host IP addresses for %s: %w", hostname, err)
 	}
 
-	// Log the IPs we're advertising on
 	fmt.Printf("  Advertising on IPs: ")
 	for i, ip := range ips {
 		if i > 0 {
@@ -94,7 +92,6 @@ func Discover(ctx context.Context) ([]Node, error) {
 func DiscoverWithDebug(ctx context.Context, debug bool) ([]Node, error) {
 	entries := make(chan *mdns.ServiceEntry, 10)
 
-	// Find suitable network interface, with debug output
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network interfaces: %w", err)
@@ -111,7 +108,6 @@ func DiscoverWithDebug(ctx context.Context, debug bool) ([]Node, error) {
 				iface.Name, iface.Flags, iface.Flags&net.FlagUp != 0, iface.Flags&net.FlagLoopback != 0)
 		}
 
-		// Skip loopback and down interfaces
 		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
 			continue
 		}
@@ -124,7 +120,6 @@ func DiscoverWithDebug(ctx context.Context, debug bool) ([]Node, error) {
 			continue
 		}
 
-		// Check if this interface has IPv4 addresses
 		for _, addr := range addrs {
 			if debug {
 				fmt.Printf("Debug: Interface %s has address: %s\n", iface.Name, addr.String())
@@ -151,7 +146,6 @@ func DiscoverWithDebug(ctx context.Context, debug bool) ([]Node, error) {
 	go func() {
 		defer close(entries)
 
-		// First try with specific interface
 		err := mdns.Query(&mdns.QueryParam{
 			Service:             ServiceName,
 			Domain:              "local",
@@ -166,12 +160,11 @@ func DiscoverWithDebug(ctx context.Context, debug bool) ([]Node, error) {
 				fmt.Printf("Debug: Query with specific interface failed: %v\n", err)
 				fmt.Printf("Debug: Retrying with all interfaces...\n")
 			}
-			// Fallback to all interfaces
 			err2 := mdns.Query(&mdns.QueryParam{
 				Service:             ServiceName,
 				Domain:              "local",
 				Timeout:             time.Second * 2,
-				Interface:           nil, // Use all interfaces
+				Interface:           nil,
 				Entries:             entries,
 				WantUnicastResponse: false,
 			})
@@ -191,14 +184,11 @@ func DiscoverWithDebug(ctx context.Context, debug bool) ([]Node, error) {
 				return nodes, nil
 			}
 
-			// Strict validation: only accept services with our exact service name pattern
 			if !strings.Contains(entry.Name, ServiceName) {
-				continue // Skip entries that don't match our service
+				continue
 			}
 
-			// Additional validation: check that the TXT record contains our identifier
 			isValidSproutService := false
-			// Check both Info (string) and InfoFields ([]string)
 			if strings.Contains(entry.Info, "sprout discovery service") {
 				isValidSproutService = true
 			} else {
@@ -211,13 +201,11 @@ func DiscoverWithDebug(ctx context.Context, debug bool) ([]Node, error) {
 			}
 
 			if !isValidSproutService {
-				continue // Skip services without our TXT record
+				continue
 			}
 
-			// Extract hostname from service name (remove service suffix)
 			hostname := entry.Name[:len(entry.Name)-len(ServiceName)]
 
-			// Add IPv4 address if available
 			if entry.AddrV4 != nil {
 				nodes = append(nodes, Node{
 					Hostname: hostname,
@@ -225,7 +213,6 @@ func DiscoverWithDebug(ctx context.Context, debug bool) ([]Node, error) {
 					Port:     entry.Port,
 				})
 			}
-			// Also add IPv6 if available and different
 			if entry.AddrV6 != nil && (entry.AddrV4 == nil || !entry.AddrV6.Equal(entry.AddrV4)) {
 				nodes = append(nodes, Node{
 					Hostname: hostname,
@@ -251,7 +238,6 @@ func getLocalIPs() ([]net.IP, error) {
 	}
 
 	for _, iface := range interfaces {
-		// Skip loopback and down interfaces
 		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
 			continue
 		}
@@ -270,12 +256,10 @@ func getLocalIPs() ([]net.IP, error) {
 				ip = v.IP
 			}
 
-			// Skip if not a valid IP or is loopback
 			if ip == nil || ip.IsLoopback() {
 				continue
 			}
 
-			// Include both IPv4 and IPv6 addresses
 			if ip.To4() != nil || ip.To16() != nil {
 				ips = append(ips, ip)
 			}
