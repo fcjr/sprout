@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/fcjr/sprout/main/sprout.schema.json",
+  "title": "Sprout Configuration",
+  "description": "Configuration file for Sprout - a tool to generate NixOS SD card images from Docker Compose files",
+  "type": "object",
+  "properties": {
+    "ssh_keys": {
+      "type": "array",
+      "description": "List of SSH public keys to enable remote access",
+      "items": {
+        "type": "string",
+        "pattern": "^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521) [A-Za-z0-9+/]+=*( .*)?$"
+      },
+      "minItems": 1,
+      "examples": [
+        [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample... user@host"
+        ]
+      ]
+    },
+    "wireless": {
+      "type": "object",
+      "description": "Wireless network configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable wireless networking",
+          "default": false
+        },
+        "networks": {
+          "type": "object",
+          "description": "Map of SSID to network configuration",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "psk": {
+                "type": "string",
+                "description": "Pre-shared key (password) for the network"
+              }
+            },
+            "required": ["psk"]
+          },
+          "examples": [
+            {
+              "MyWiFi": {
+                "psk": "password123"
+              },
+              "WorkNetwork": {
+                "psk": "different-password"
+              }
+            }
+          ]
+        }
+      },
+      "required": ["enabled"]
+    },
+    "docker_compose": {
+      "type": "object",
+      "description": "Docker Compose configuration to embed in the image",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Docker Compose embedding",
+          "default": false
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to docker-compose.yml file (relative to sprout.yaml or absolute)",
+          "examples": ["docker-compose.yml", "./compose/app.yml"]
+        }
+      },
+      "required": ["enabled"],
+      "if": {
+        "properties": { "enabled": { "const": true } }
+      },
+      "then": {
+        "required": ["path"]
+      }
+    },
+    "autodiscovery": {
+      "type": "boolean",
+      "description": "Enable mDNS/Bonjour broadcasting for network discovery via 'sprout discover'",
+      "default": false
+    },
+    "output": {
+      "type": "object",
+      "description": "Output configuration for the generated image",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path where the built image should be saved (relative to sprout.yaml or absolute)",
+          "default": "build/image.img",
+          "examples": ["build/image.img", "/tmp/sprout-image.img"]
+        }
+      }
+    }
+  },
+  "required": ["ssh_keys"],
+  "additionalProperties": false
+}

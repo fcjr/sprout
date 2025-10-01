@@ -62,6 +62,8 @@ sprout burn build/image.img  # Flash to SD card
 
 **With Docker Compose** (recommended):
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fcjr/sprout/main/sprout.schema.json
+
 ssh_keys:
   - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample...
 
@@ -74,6 +76,8 @@ autodiscovery: true
 output:
   path: build/image.img
 ```
+
+> **💡 Tip:** The schema comment enables autocomplete and validation in editors like VS Code with the YAML extension.
 
 **With just SSH and WiFi**:
 ```yaml

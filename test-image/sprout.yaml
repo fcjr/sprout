@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fcjr/sprout/main/sprout.schema.json
+
 docker_compose:
   enabled: true
   path: "./docker-compose.yaml"
