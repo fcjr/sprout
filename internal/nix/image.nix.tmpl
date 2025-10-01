@@ -7,14 +7,17 @@ let
       ];
       
       system.stateVersion = "24.11";
-      # The installer starts with a "nixos" user to allow installation, so add the SSH key to
-      # that user. Note that the key is, at the time of writing, put in `/etc/ssh/authorized_keys.d`
+      # Create sprout user with SSH access
 {{- if .SSHKeys }}
-      users.extraUsers.nixos.openssh.authorizedKeys.keys = [
+      users.users.sprout = {
+        isNormalUser = true;
+        extraGroups = [ "wheel"{{- if .DockerCompose.Enabled }} "docker"{{- end }} ];
+        openssh.authorizedKeys.keys = [
 {{- range .SSHKeys }}
-        "{{ . }}"
+          "{{ . }}"
 {{- end }}
-      ];
+        ];
+      };
 {{- end }}
       # bzip2 compression takes loads of time with emulation, skip it.
       sdImage.compressImage = false;
@@ -51,9 +54,6 @@ let
       # Use smaller log driver and limit log size
       virtualisation.docker.logDriver = "json-file";
       virtualisation.docker.extraOptions = "--log-opt max-size=10m --log-opt max-file=3";
-      
-      # Add nixos user to docker group
-      users.extraUsers.nixos.extraGroups = [ "docker" ];
       
       # Create docker-compose.yaml file with local image references
       environment.etc."docker/docker-compose.yaml".text = ''
@@ -104,7 +104,7 @@ let
           ExecStart = "${pkgs.docker-compose}/bin/docker-compose up -d";
           ExecStop = "${pkgs.docker-compose}/bin/docker-compose down";
           TimeoutStartSec = "0";
-          User = "nixos";
+          User = "sprout";
         };
       };
 {{- end }}

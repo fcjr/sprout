@@ -122,7 +122,7 @@ sprout discover
 
 Find your device on the network, then SSH in:
 ```bash
-ssh nixos@<discovered-ip>
+ssh sprout@<discovered-ip>
 ```
 
 ## Configuration Reference
