@@ -122,33 +122,27 @@ func getMacOSDiskInfo(device string) (*DiskInfo, error) {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
+		parts := strings.Split(line, ":")
+		if len(parts) <= 1 {
+			continue
+		}
+
+		value := strings.TrimSpace(parts[1])
+
 		if strings.Contains(line, "Disk Size:") {
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				sizeStr := strings.TrimSpace(parts[1])
-				info.Size = sizeStr
-				if idx := strings.Index(sizeStr, "("); idx != -1 {
-					if endIdx := strings.Index(sizeStr[idx:], " Bytes)"); endIdx != -1 {
-						bytesStr := sizeStr[idx+1 : idx+endIdx]
-						if bytes, err := strconv.ParseUint(bytesStr, 10, 64); err == nil {
-							info.SizeBytes = bytes
-						}
-					}
+			info.Size = value
+			idx := strings.Index(value, "(")
+			endIdx := strings.Index(value[idx:], " Bytes)")
+			if idx != -1 && endIdx != -1 {
+				bytesStr := value[idx+1 : idx+endIdx]
+				if bytes, err := strconv.ParseUint(bytesStr, 10, 64); err == nil {
+					info.SizeBytes = bytes
 				}
 			}
 		} else if strings.Contains(line, "Volume Name:") {
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				info.Name = strings.TrimSpace(parts[1])
-			}
-		} else if strings.Contains(line, "Mount Point:") {
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				mountpoint := strings.TrimSpace(parts[1])
-				if mountpoint != "Not applicable (no file system)" {
-					info.Mountpoint = mountpoint
-				}
-			}
+			info.Name = value
+		} else if strings.Contains(line, "Mount Point:") && value != "Not applicable (no file system)" {
+			info.Mountpoint = value
 		}
 	}
 

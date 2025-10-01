@@ -19,17 +19,16 @@ func FindImageFile(basePath string) (string, error) {
 	}
 
 	if strings.Contains(basePath, "sprout-docker-") {
-		if filepath.Base(basePath) == "result.img" {
-			if !fileInfo.IsDir() {
-				return basePath, nil
-			}
-			return "", fmt.Errorf("Docker build completed but image file not found at %s", basePath)
+		isResultImg := filepath.Base(basePath) == "result.img"
+		if isResultImg && !fileInfo.IsDir() {
+			return basePath, nil
 		}
+
 		resultImg := filepath.Join(basePath, "result.img")
 		if _, err := os.Stat(resultImg); err == nil {
 			return resultImg, nil
 		}
-		return "", fmt.Errorf("Docker build completed but image file not found at %s", resultImg)
+		return "", fmt.Errorf("docker build completed but image file not found at %s", resultImg)
 	}
 
 	sdImageDir := filepath.Join(basePath, "sd-image")

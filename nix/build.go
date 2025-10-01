@@ -56,12 +56,10 @@ func (n *Nix) BuildSproutBinary() (string, error) {
 }
 
 func (n *Nix) Build(filename string, sproutFile *SproutFile) (string, error) {
-	if os.Getenv("SPROUT_DISABLE_LOCAL_NIX") != "" {
-		fmt.Printf("      \033[36mLocal Nix disabled via SPROUT_DISABLE_LOCAL_NIX, using Docker build...\033[0m\n")
-		return n.buildWithDocker(filename, sproutFile)
-	}
+	isDisabled := os.Getenv("SPROUT_DISABLE_LOCAL_NIX") != ""
+	nixPath, hasNix := exec.LookPath("nix-build")
 
-	if nixPath, err := exec.LookPath("nix-build"); err == nil {
+	if !isDisabled && hasNix == nil {
 		fmt.Printf("      \033[36mUsing local Nix installation for faster builds...\033[0m\n")
 		return n.buildLocal(nixPath, filename, sproutFile)
 	}
