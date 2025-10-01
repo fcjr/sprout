@@ -111,6 +111,8 @@ This generates a bootable NixOS image at `build/image.img` with:
 ### 4. Flash to SD Card
 
 ```bash
+sprout burn  # Automatically uses image path from sprout.yaml
+# Or specify an image directly:
 sprout burn build/image.img
 ```
 
@@ -193,7 +195,7 @@ The generated images are standard NixOS SD card images tailored for ARM64 system
 ## Commands
 
 - `sprout seed` - Generate a bootable image from sprout.yaml
-- `sprout burn <image>` - Flash an image to an SD card
+- `sprout burn [image]` - Flash an image to an SD card (uses sprout.yaml path if image omitted)
 - `sprout discover` - Find Sprout devices on your network
 - `sprout daemon` - Run the discovery daemon (advanced)
 
