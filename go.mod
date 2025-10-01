@@ -4,7 +4,8 @@ go 1.24.6
 
 require (
 	github.com/compose-spec/compose-go/v2 v2.8.1
-	github.com/docker/docker v27.4.0+incompatible
+	github.com/docker/docker v28.0.0+incompatible
+	github.com/hashicorp/mdns v1.0.6
 	github.com/muesli/mango-cobra v1.2.0
 	github.com/muesli/roff v0.1.0
 	github.com/spf13/cobra v1.9.1
@@ -22,7 +23,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/hashicorp/mdns v1.0.6 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-shellwords v1.0.12 // indirect
 	github.com/miekg/dns v1.1.55 // indirect
