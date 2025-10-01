@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/fcjr/sprout/internal/burn"
-	"github.com/fcjr/sprout/nix"
+	"github.com/fcjr/sprout/internal/nix"
 	"github.com/spf13/cobra"
 )
 

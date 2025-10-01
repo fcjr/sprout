@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/fcjr/sprout/nix"
+	"github.com/fcjr/sprout/internal/nix"
 	"github.com/spf13/cobra"
 )
 
